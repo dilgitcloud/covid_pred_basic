@@ -52,6 +52,7 @@ def dt_process(df2,option_slctd):
     y_pred = Larspd.predict(x_pred)                                        #predicting using regressor for the 5% days
 
     model_scores = []
+    model_scores.append(np.sqrt(mean_squared_error(valid_ml["new_cases"], y_pred)))
     # lin_reg.score(x_pred,valid_ml['new_cases'])
     # print(np.sqrt(mean_squared_error(valid_ml["new_cases"], y_pred)))
 
@@ -219,7 +220,7 @@ def dt_process(df2,option_slctd):
     # dates_list_num = list(range(0,len(dates_list)))
     dates_list_num = dt_one_country['date']
     # Plot results
-    model_scores.append(np.sqrt(mean_squared_error(real_data, np.expm1(predicted_data))))
+    model_scores.append(np.sqrt(mean_squared_error(real_data.iloc[train_days:], np.expm1(predicted_data.iloc[train_days:]))))
     fig_LagPred = go.Figure()
     fig_LagPred.add_trace(go.Scatter(x=dates_list_num, y=np.expm1(predicted_data),
                                      mode='lines+markers', name="Prediction new Cases " + str(opted_country)))
@@ -251,7 +252,7 @@ def dt_process(df2,option_slctd):
     # ax2.set_ylabel("Log new Cases")
 
     # plt.suptitle(("ConfirmedCases predictions based on Log-Lineal Regression for "+country_name))
-    model_names = ["Polynomial Regression","Holts Linear Prediction","Linear Regression Lagged Model"]      #use this score to compare predictors
+    model_names = ["Lasso Lars Regression", "Polynomial Regression","Holts Linear Prediction","Linear Regression Lagged Model"]      #use this score to compare predictors
     model_summary = pd.DataFrame(zip(model_names, model_scores),
                                  columns=["Model Name", "Root Mean Squared Error"]).sort_values(
         ["Root Mean Squared Error"])
