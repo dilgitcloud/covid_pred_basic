@@ -16,7 +16,7 @@ import datetime as dt
 from datetime import timedelta
 
 #from sklearn.model_selection import GridSearchCV
-from sklearn.linear_model import LinearRegression,Ridge,Lasso       #pip install sklearn
+from sklearn.linear_model import LinearRegression,Ridge,Lasso,LassoLars       #pip install sklearn
 from sklearn.metrics import silhouette_score, silhouette_samples
 from sklearn.metrics import mean_squared_error,r2_score
 from sklearn.preprocessing import StandardScaler
@@ -43,35 +43,41 @@ def dt_process(df2,option_slctd):
 
     fitinput_x = np.array(train_ml["Days Since"]).reshape(-1, 1)            #data should be in arrays for regressors, i think, have to cross check this   Days Since is the known x data
     fitinput_y = np.array(train_ml["new_cases"]).reshape(-1, 1)             # new_cases is the y data, this data is used to 'fit' the regressor
-    lin_reg = LinearRegression(normalize=True)                              #use this Linear Regressor model 'lin_reg' to fit and predict
 
-    lin_reg.fit(fitinput_x, fitinput_y)                                     #fitting the regressor
+    # linreg = LinearRegression(normalize=True)                              #use this Linear Regressor model 'lin_reg' to fit and predict
+    Larspd = LassoLars(alpha=.1)
+    Larspd.fit(fitinput_x, fitinput_y)                                     #fitting the regressor
+
     x_pred = np.array(valid_ml["Days Since"]).reshape(-1, 1)
-    y_pred = lin_reg.predict(x_pred)                                        #predicting using regressor for the 5% days
+    y_pred = Larspd.predict(x_pred)                                        #predicting using regressor for the 5% days
+
     model_scores = []
     # lin_reg.score(x_pred,valid_ml['new_cases'])
     # print(np.sqrt(mean_squared_error(valid_ml["new_cases"], y_pred)))
 
     # plt.figure(figsize=(11, 6))
-    prediction_linreg = lin_reg.predict(np.array(dt_one_country["Days Since"]).reshape(-1, 1))      #use this as predictor for all the days, to understand the fitting line
+    prediction_linreg = Larspd.predict(np.array(dt_one_country["Days Since"]).reshape(-1, 1))      #use this as predictor for all the days, to understand the fitting line
     linreg_output = []
-
+    # print("i am predicting ")
     for i in range(prediction_linreg.shape[0]):
-        linreg_output.append(prediction_linreg[i][0])
-
-    fig_LinearReg = go.Figure()     #this handle can be returned to plot the figure outside of this function
+        linreg_output.append(prediction_linreg[i])#[0])
+    # print("i am before figure ")
+    fig_LarsReg = go.Figure()     #this handle can be returned to plot the figure outside of this function
     #not currently returned
     #shows the original recorded data for all the days
-    fig_LinearReg.add_trace(go.Scatter(x=dt_one_country['date'], y=dt_one_country["new_cases"],
+    fig_LarsReg.add_trace(go.Scatter(x=dt_one_country['date'], y=dt_one_country["new_cases"],
                                        mode='lines+markers', name="Train Data for new Cases"))
     #shows the predicted data for all the days
-    fig_LinearReg.add_trace(go.Scatter(x=dt_one_country['date'], y=linreg_output,
-                                       mode='lines', name="Linear Regression Best Fit Line",
-                                       line=dict(color='black', dash='dot')))
-    fig_LinearReg.add_vline(x=valid_ml['date'].iloc[0], line_dash="dash")  # ,#add vertical line on the date to know the SPLIT between training and test data
-    fig_LinearReg.update_layout(title="new Cases Linear Regression Prediction " + str(opted_country),
+    fig_LarsReg.add_trace(go.Scatter(x=valid_ml['date'], y=y_pred,
+                                       mode='lines', name="Lars Regression Best Fit Line",
+                                       line=dict(color='red', dash='dot')))
+    # fig_LarsReg.add_trace(go.Scatter(x=dt_one_country['date'], y=linreg_output,
+    #                                    mode='lines', name="Linear Regression Best Fit Line",
+    #                                    line=dict(color='black', dash='dot')))
+    fig_LarsReg.add_vline(x=valid_ml['date'].iloc[0], line_dash="dash")  # ,#add vertical line on the date to know the SPLIT between training and test data
+    fig_LarsReg.update_layout(title="new Cases Lars Regression Prediction " + str(opted_country),
                                 xaxis_title="Date", yaxis_title="new Cases", legend=dict(x=0, y=1, traceorder="normal"))
-    # fig_LinearReg.show()
+    # fig_LarsReg.show()
 
     poly = PolynomialFeatures(degree=8)                 #Polynomial regressor initiate the model
     train_poly = poly.fit_transform(fitinput_x)         #do not know why we need this fit_transform specifically for Polynomial method
@@ -109,7 +115,7 @@ def dt_process(df2,option_slctd):
     # fig.add_trace(go.Scatter(x=dt_one_country['date'], y=predictions_poly,
     fig_PolyReg.add_trace(go.Scatter(x=add_pred_dates, y=predictions_poly,
                                      mode='lines', name="Polynomial Regression Best Fit",
-                                     line=dict(color='black', dash='dot')))
+                                     line=dict(color='red', dash='dot')))
     fig_PolyReg.add_vline(x=valid_ml['date'].iloc[0], line_dash="dash")  # ,#add vertical line on the date to know the SPLIT between training and test data
     fig_PolyReg.update_layout(title="new Cases Polynomial Regression Prediction",
                               xaxis_title="Date", yaxis_title="new Cases",
@@ -250,7 +256,7 @@ def dt_process(df2,option_slctd):
                                  columns=["Model Name", "Root Mean Squared Error"]).sort_values(
         ["Root Mean Squared Error"])
     print(model_summary)
-    return fig_PolyReg, fig_Holt, fig_LagPred
+    return fig_LarsReg, fig_PolyReg, fig_Holt, fig_LagPred
 
 def calculate_lag(df, lag_list, column):
     for lag in lag_list:
@@ -315,6 +321,7 @@ app.layout=html.Div([
                  ),
     html.Br(),
     html.Div(id="deathno",title="Deaths",draggable="true"),
+    dcc.Graph(id="fig_LarsReg", figure={}),
     dcc.Graph(id="fig_PolyReg",figure={}),
     dcc.Graph(id="fig_Holt",figure={}),
     dcc.Graph(id="fig_LagPred",figure={})
@@ -325,7 +332,8 @@ app.layout=html.Div([
 #call back
 
 @app.callback(
-    [Output(component_id="fig_PolyReg",component_property="figure"),
+    [Output(component_id="fig_LarsReg",component_property="figure"),
+        Output(component_id="fig_PolyReg",component_property="figure"),
      Output(component_id="fig_Holt",component_property="figure"),
      Output(component_id="fig_LagPred",component_property="figure")],
     Input(component_id="my_option",component_property="value")
@@ -336,12 +344,13 @@ def update_graph(option_slctd):
     # filterdata=df[df["location"]==option_slctd]
     # deaths=int(filterdata["new_deaths"].sum())
 
-    fig_PolyReg_ret, fig_Holt_ret, fig_LagPred_ret = dt_process(df, option_slctd)       #returns the figures to show
+    # fig_LinearReg_ret, \
+    fig_LarsReg_ret, fig_PolyReg_ret, fig_Holt_ret, fig_LagPred_ret = dt_process(df, option_slctd)       #returns the figures to show
 
     # fig=px.line(filterdata,x="date",y="total_cases")
     # fig2=px.line(filterdata,x="date",y="new_cases",title="New Cases With Date")
 
-    return fig_PolyReg_ret,fig_Holt_ret,fig_LagPred_ret #fig,fig2
+    return fig_LarsReg_ret, fig_PolyReg_ret,fig_Holt_ret,fig_LagPred_ret #fig,fig2,fig_LinearReg_ret,
 
 if __name__ == '__main__':
     app.run_server(debug=True)
